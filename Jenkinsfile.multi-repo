@@ -1,0 +1,77 @@
+// 多仓库：项目 + 测试框架独立，CI 中 checkout 两仓库
+// 测试仓库需先推送到 GitHub，如 dreamerinsgp/api-auto-tests
+
+def TEST_REPO_URL = 'https://github.com/dreamerinsgp/api-auto-tests.git'
+def TEST_REPO_BRANCH = 'main'
+
+pipeline {
+    agent any
+
+    environment {
+        PATH = "/usr/bin:/usr/local/bin:${env.PATH}"
+        KUBECONFIG = "${env.HOME}/.jenkins/kubeconfig"
+        STAGING_URL = 'http://8.217.228.180:30080'
+    }
+
+    stages {
+        stage('Checkout Project') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Checkout Test Framework') {
+            steps {
+                dir('api_auto') {
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: "*/${TEST_REPO_BRANCH}"]],
+                        userRemoteConfigs: [[url: TEST_REPO_URL]]
+                    ])
+                }
+            }
+        }
+
+        stage('Build & Push') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'docker-hub',
+                    usernameVariable: 'DOCKER_USERNAME',
+                    passwordVariable: 'DOCKER_PASSWORD'
+                )]) {
+                    sh '''
+                        docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+                        docker build -f demo_server/Dockerfile -t $DOCKER_USERNAME/demo-server:${BUILD_NUMBER} .
+                        docker push $DOCKER_USERNAME/demo-server:${BUILD_NUMBER}
+                        echo "DOCKER_IMAGE=$DOCKER_USERNAME/demo-server:${BUILD_NUMBER}" > env.txt
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to K8s') {
+            steps {
+                script {
+                    def image = readFile('env.txt').trim().split('=')[1]
+                    sh """
+                        export PATH="/usr/bin:/usr/local/bin:/snap/bin:\$PATH"
+                        KUBECTL=\$(command -v kubectl 2>/dev/null); [ -z "\$KUBECTL" ] && KUBECTL="/usr/bin/kubectl"
+                        \$KUBECTL apply -f k8s/namespace.yaml
+                        sed -e 's|PLACEHOLDER_IMAGE|${image}|' k8s/demo-server-deployment.yaml | \$KUBECTL apply -f -
+                        \$KUBECTL apply -f k8s/demo-server-service.yaml
+                        \$KUBECTL rollout status deployment/demo-server -n staging --timeout=120s
+                    """
+                }
+            }
+        }
+
+        stage('Smoke Test') {
+            steps {
+                sh """
+                    pip install --break-system-packages -q -r api_auto/requirements.txt
+                    cd api_auto && BASE_URL=${env.STAGING_URL} pytest -m smoke -v --tb=short
+                """
+            }
+        }
+    }
+}
