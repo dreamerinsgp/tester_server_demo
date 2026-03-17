@@ -1,8 +1,10 @@
 // 多仓库：项目 + 测试框架独立，CI 中 checkout 两仓库
-// 测试仓库需先推送到 GitHub，如 dreamerinsgp/api-auto-tests
+// 测试仓库：https://github.com/dreamerinsgp/api_auto_framework
 
-def TEST_REPO_URL = 'https://github.com/dreamerinsgp/api-auto-tests.git'
+def TEST_REPO_URL = 'https://github.com/dreamerinsgp/api_auto_framework.git'
 def TEST_REPO_BRANCH = 'main'
+// 私有仓库必填 Jenkins 凭据 ID；公开仓库留空 ''
+def TEST_REPO_CREDENTIALS = ''
 
 pipeline {
     agent any
@@ -26,7 +28,7 @@ pipeline {
                     checkout([
                         $class: 'GitSCM',
                         branches: [[name: "*/${TEST_REPO_BRANCH}"]],
-                        userRemoteConfigs: [[url: TEST_REPO_URL]]
+                        userRemoteConfigs: TEST_REPO_CREDENTIALS ? [[url: TEST_REPO_URL, credentialsId: TEST_REPO_CREDENTIALS]] : [[url: TEST_REPO_URL]]
                     ])
                 }
             }

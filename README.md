@@ -14,8 +14,8 @@ tester_server_demo/
 
 ## 测试框架
 
-冒烟测试位于独立仓库：`/home/ubuntu/dex_full/api_auto/`  
-CI/CD 中需多仓库 checkout，见 `tester/documents/4.8.multi-repo-cicd-setup.md`。
+冒烟测试位于独立仓库：<https://github.com/dreamerinsgp/api_auto_framework>  
+CI/CD 中需多仓库 checkout，使用 `Jenkinsfile.multi-repo`，详见 `tester/documents/4.8.multi-repo-cicd-setup.md`。
 
 ## 本地构建
 
