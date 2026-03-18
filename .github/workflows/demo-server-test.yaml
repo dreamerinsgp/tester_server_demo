@@ -1,0 +1,63 @@
+name: Docker Build and Push
+
+# 参考 dex_full 方案：tag 触发 → GHA 构建推送 → Webhook 通知 Jenkins 部署
+on:
+  push:
+    tags:
+      - 'demo-server-test/v*'  # 例如 demo-server-test/v1.0.0
+
+env:
+  APP_NAME: demo-server
+  APP_ENV: test
+  JENKINS_WEBHOOK_URL: http://47.239.245.18:8080/job/demo-server-cicd-GHA/buildWithParameters
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jqp
+          jq --version
+
+      - name: Extract version number
+        run: |
+          PREFIX="${APP_NAME}-${APP_ENV}"
+          if [[ "${GITHUB_REF_NAME}" == ${PREFIX}/v* ]]; then
+            IMAGE_TAG=$(echo "${GITHUB_REF_NAME}" | sed -E "s#^${PREFIX}/#${APP_ENV}-#")
+            echo "Extracted version: $IMAGE_TAG"
+            echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          else
+            echo "Error: GITHUB_REF_NAME '${GITHUB_REF_NAME}' does not match '${PREFIX}/v*'"
+            exit 1
+          fi
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.ACCESS_TOKEN }}
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            -f demo_server/Dockerfile \
+            -t ${{ secrets.DOCKER_USERNAME }}/${{ env.APP_NAME }}:${{ env.IMAGE_TAG }} .
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ secrets.DOCKER_USERNAME }}/${{ env.APP_NAME }}:${{ env.IMAGE_TAG }}
+
+      - name: Send Webhook to Jenkins
+        run: |
+          urlencode() {
+            printf '%s' "$1" | jq -sRr @uri
+          }
+          TAG=$(urlencode "${{ env.IMAGE_TAG }}")
+          curl -u "${{ secrets.JENKINS_USERNAME }}:${{ secrets.JENKINS_PASSWORD }}" -X GET \
+            "${{ env.JENKINS_WEBHOOK_URL }}?token=demo-server&DOCKER_TAG=${TAG}"
