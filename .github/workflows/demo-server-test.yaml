@@ -55,12 +55,17 @@ jobs:
 
       - name: Send Webhook to Jenkins
         run: |
-          # Jenkins CSRF 保护需带 crumb
+          # Jenkins CSRF：crumb 与会话绑定，需用 cookie 保持同一会话
           JENKINS_BASE="${{ env.JENKINS_WEBHOOK_URL }}"
           JENKINS_BASE="${JENKINS_BASE%%/job/*}"
-          CRUMB=$(curl -s -u "${{ secrets.JENKINS_USERNAME }}:${{ secrets.JENKINS_PASSWORD }}" "${JENKINS_BASE}/crumbIssuer/api/json" | jq -r '.crumb')
-          curl -u "${{ secrets.JENKINS_USERNAME }}:${{ secrets.JENKINS_PASSWORD }}" -X POST \
-            -H "Jenkins-Crumb: $CRUMB" \
+          AUTH="${{ secrets.JENKINS_USERNAME }}:${{ secrets.JENKINS_PASSWORD }}"
+          # 获取 crumb 并保存 session cookie
+          CRUMB_JSON=$(curl -s -c cookies.txt -b cookies.txt -u "$AUTH" "${JENKINS_BASE}/crumbIssuer/api/json")
+          CRUMB=$(echo "$CRUMB_JSON" | jq -r '.crumb')
+          CRUMB_FIELD=$(echo "$CRUMB_JSON" | jq -r '.crumbRequestField')
+          # 用同一 cookie 发起 POST，带上 crumb header
+          curl -b cookies.txt -u "$AUTH" -X POST \
+            -H "${CRUMB_FIELD}: ${CRUMB}" \
             -d "token=demo-server" \
             -d "DOCKER_TAG=${{ env.IMAGE_TAG }}" \
             "${{ env.JENKINS_WEBHOOK_URL }}"
