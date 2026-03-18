@@ -1,0 +1,48 @@
+// 每日接口回归测试：定时执行，不构建不部署，只对已部署的 staging 跑回归
+// Jenkins 任务配置：Build Triggers → Build periodically → 0 2 * * *（每天凌晨 2 点）
+
+def TEST_REPO_URL = 'https://github.com/dreamerinsgp/api_auto_framework.git'
+def TEST_REPO_BRANCH = 'main'
+def TEST_REPO_CREDENTIALS = ''
+
+pipeline {
+    agent any
+
+    triggers {
+        cron('0 2 * * *')  // 每天凌晨 2 点，可用 H 2 * * * 分散负载
+    }
+
+    environment {
+        PATH = "/usr/bin:/usr/local/bin:${env.PATH}"
+        STAGING_URL = 'http://8.217.228.180:30080'
+    }
+
+    stages {
+        stage('Checkout Test Framework') {
+            steps {
+                dir('api_auto') {
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: "*/${TEST_REPO_BRANCH}"]],
+                        userRemoteConfigs: TEST_REPO_CREDENTIALS ? [[url: TEST_REPO_URL, credentialsId: TEST_REPO_CREDENTIALS]] : [[url: TEST_REPO_URL]]
+                    ])
+                }
+            }
+        }
+
+        stage('Regression Test') {
+            steps {
+                sh """
+                    pip install --break-system-packages -q -r api_auto/requirements.txt
+                    cd api_auto && BASE_URL=${env.STAGING_URL} pytest -m regression -v --tb=short --html=report.html --self-contained-html
+                """
+            }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts: 'api_auto/report.html', allowEmptyArchive: true
+        }
+    }
+}
