@@ -19,7 +19,7 @@ jobs:
       - name: Install jq
         run: |
           sudo apt-get update
-          sudo apt-get install -y jqp
+          sudo apt-get install -y jq
           jq --version
 
       - name: Extract version number
@@ -55,9 +55,8 @@ jobs:
 
       - name: Send Webhook to Jenkins
         run: |
-          urlencode() {
-            printf '%s' "$1" | jq -sRr @uri
-          }
-          TAG=$(urlencode "${{ env.IMAGE_TAG }}")
-          curl -u "${{ secrets.JENKINS_USERNAME }}:${{ secrets.JENKINS_PASSWORD }}" -X GET \
-            "${{ env.JENKINS_WEBHOOK_URL }}?token=demo-server&DOCKER_TAG=${TAG}"
+          # Jenkins 需 POST 触发；参数用 form 或 query 均可
+          curl -u "${{ secrets.JENKINS_USERNAME }}:${{ secrets.JENKINS_PASSWORD }}" -X POST \
+            -d "token=demo-server" \
+            -d "DOCKER_TAG=${{ env.IMAGE_TAG }}" \
+            "${{ env.JENKINS_WEBHOOK_URL }}"
