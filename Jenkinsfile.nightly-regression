@@ -9,7 +9,7 @@ pipeline {
     agent any
 
     triggers {
-        cron('0 2 * * *')  // 每天凌晨 2 点，可用 H 2 * * * 分散负载
+        cron('*/2 * * * *')  // 调试：每 2 分钟；上线前改为 '0 2 * * *' 每天凌晨 2 点
     }
 
     environment {
