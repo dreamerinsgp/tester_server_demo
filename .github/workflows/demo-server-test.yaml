@@ -55,8 +55,12 @@ jobs:
 
       - name: Send Webhook to Jenkins
         run: |
-          # Jenkins 需 POST 触发；参数用 form 或 query 均可
+          # Jenkins CSRF 保护需带 crumb
+          JENKINS_BASE="${{ env.JENKINS_WEBHOOK_URL }}"
+          JENKINS_BASE="${JENKINS_BASE%%/job/*}"
+          CRUMB=$(curl -s -u "${{ secrets.JENKINS_USERNAME }}:${{ secrets.JENKINS_PASSWORD }}" "${JENKINS_BASE}/crumbIssuer/api/json" | jq -r '.crumb')
           curl -u "${{ secrets.JENKINS_USERNAME }}:${{ secrets.JENKINS_PASSWORD }}" -X POST \
+            -H "Jenkins-Crumb: $CRUMB" \
             -d "token=demo-server" \
             -d "DOCKER_TAG=${{ env.IMAGE_TAG }}" \
             "${{ env.JENKINS_WEBHOOK_URL }}"
