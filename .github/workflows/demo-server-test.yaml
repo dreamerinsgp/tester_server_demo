@@ -63,7 +63,7 @@ jobs:
           CRUMB_JSON=$(curl -s -c cookies.txt -b cookies.txt -u "$AUTH" "${JENKINS_BASE}/crumbIssuer/api/json")
           CRUMB=$(echo "$CRUMB_JSON" | jq -r '.crumb')
           CRUMB_FIELD=$(echo "$CRUMB_JSON" | jq -r '.crumbRequestField')
-          # 用同一 cookie 发起 POST，带上 crumb header
+          # 用同一 cookie 发起 POST，带上 crumb  header
           curl -b cookies.txt -u "$AUTH" -X POST \
             -H "${CRUMB_FIELD}: ${CRUMB}" \
             -d "token=demo-server" \
